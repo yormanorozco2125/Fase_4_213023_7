@@ -5,31 +5,68 @@
 
 from excepciones_y_clases_bases import DatoInvalidoError, ServicioNoDisponibleError, ReservaError
 from clientes_servicios import Cliente, Servicio, ReservaSala, AlquilerEquipo, AsesoriaEspecializada
+from datetime import date, datetime
 import logging
+
+MAX_DIAS_ANTICIPACION = 365
+
+
+def validar_fecha(valor):
+    """Convierte 'AAAA-MM-DD' (o un objeto date) en date, validando que no sea pasada
+    ni esté a más de un año de anticipación."""
+    if isinstance(valor, date):
+        fecha = valor
+    else:
+        try:
+            fecha = datetime.strptime(str(valor).strip(), "%Y-%m-%d").date()
+        except ValueError:
+            logging.error(f"Fecha inválida: {valor!r}")
+            raise DatoInvalidoError("La fecha debe tener el formato AAAA-MM-DD (ej. 2026-12-01).") from None
+    hoy = date.today()
+    if fecha < hoy:
+        logging.error(f"Fecha en el pasado: {fecha}")
+        raise DatoInvalidoError("No se pueden hacer reservas en fechas pasadas.")
+    if (fecha - hoy).days > MAX_DIAS_ANTICIPACION:
+        logging.error(f"Fecha demasiado lejana: {fecha}")
+        raise DatoInvalidoError(f"Solo se puede reservar con máximo {MAX_DIAS_ANTICIPACION} días de anticipación.")
+    return fecha
+
 
 class Reserva:
     """Controla el flujo completo de una reserva aplicando bloques try/except/else/finally y logging."""
     _contador = 100
 
-    def __init__(self, cliente, servicio, tiempo):
+    def __init__(self, cliente, servicio, tiempo, fecha=None):
         Reserva._contador += 1
         self.id_reserva = f"RES-{Reserva._contador}"
         self.cliente = cliente
         self.servicio = servicio
         self.tiempo = tiempo
+        self.fecha = validar_fecha(fecha) if fecha is not None else None
         self.estado = "Pendiente"
         self.costo_total = 0.0
+        self.parametros = {}
 
     def procesar(self, *args, **kwargs):
         """Procesa la reserva de manera robusta controlando errores y registrando estados."""
         logging.info(f"Intentando procesar la reserva {self.id_reserva}")
+        if self.estado != "Pendiente":
+            raise ReservaError(f"La reserva {self.id_reserva} ya fue procesada (estado: {self.estado}).")
+        self.parametros = dict(kwargs)
         try:
             # Validación de tipos de datos en la reserva
             if not isinstance(self.cliente, Cliente) or not isinstance(self.servicio, Servicio):
                 raise ReservaError("Datos de cliente o servicio incorrectos.")
-            
+
+            # Control de disponibilidad: servicio activo y fecha libre
+            self.servicio.verificar_disponibilidad(self.fecha)
+
             # Cálculo polimórfico del costo del servicio
             self.costo_total = self.servicio.calcular_costo(*args, **kwargs)
+
+            # Se bloquea la fecha para que nadie más pueda reservar el servicio ese día
+            if self.fecha is not None:
+                self.servicio.ocupar(self.fecha)
 
         except (DatoInvalidoError, ServicioNoDisponibleError) as e:
             # Captura de errores controlados específicos
@@ -56,6 +93,8 @@ class Reserva:
         """Permite cancelar únicamente reservas que se encuentren confirmadas."""
         if self.estado == "Confirmada":
             self.estado = "Cancelada"
+            if self.fecha is not None:
+                self.servicio.liberar(self.fecha)  # La fecha vuelve a quedar disponible
             logging.info(f"Reserva {self.id_reserva} cancelada.")
         else:
             raise ReservaError("Solo se pueden cancelar reservas que estén confirmadas.")

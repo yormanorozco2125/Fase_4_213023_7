@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 # Configuración básica para guardar los errores en un archivo log externo (sistema.log)
 logging.basicConfig(
     filename="sistema.log",
+    encoding="utf-8",
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
@@ -35,7 +36,11 @@ class Entidad(ABC):
     """Clase abstracta que define la estructura base para objetos con identificación única."""
     
     def __init__(self, id_entidad):
-        self._id_entidad = id_entidad
+        # Validación: el identificador debe ser un texto no vacío
+        if not isinstance(id_entidad, str) or not id_entidad.strip():
+            logging.error(f"Identificador inválido: {id_entidad!r}")
+            raise DatoInvalidoError("El identificador de la entidad no puede estar vacío.")
+        self._id_entidad = id_entidad.strip()
 
     @property
     def id_entidad(self):

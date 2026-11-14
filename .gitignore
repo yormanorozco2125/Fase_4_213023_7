@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+build/
+dist/
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+.env
+
+# Logs generados al ejecutar el sistema
+*.log
+
+# Editores / IDE
+.vscode/
+.idea/
+*.swp
+
+# Sistema operativo
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# Herramientas locales
+.codegraph/
+.claude/
